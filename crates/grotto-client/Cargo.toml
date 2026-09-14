@@ -1,0 +1,24 @@
+[package]
+name = "grotto-client"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+ed25519-dalek = { workspace = true, features = ["rand_core"] }
+getrandom.workspace = true
+grotto-mls.workspace = true
+grotto-protocol.workspace = true
+mls-rs.workspace = true
+mls-rs-core = "0.27"
+zeroize = "1"
+libc = "0.2"
+rusqlite.workspace = true
+rustls.workspace = true
+serde.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
+tokio-rustls.workspace = true
+toml = "1.1.5"
+
+[dev-dependencies]
+grotto-relay = { path = "../grotto-relay" }
