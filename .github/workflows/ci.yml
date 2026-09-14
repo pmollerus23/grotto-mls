@@ -33,11 +33,10 @@ jobs:
           components: rustfmt
       - name: Check Rust formatting
         run: cargo fmt --all --check
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: actionlint
+      - name: Install workflow linter
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.11
       - name: Validate GitHub workflows
-        run: actionlint
+        run: '"$(go env GOPATH)/bin/actionlint"'
 
   test:
     name: Rust checks and integration tests
