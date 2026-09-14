@@ -10,26 +10,81 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: "1"
+  CARGO_INCREMENTAL: "0"
+
 jobs:
-  test:
-    runs-on: ubuntu-latest
+  lint:
+    name: Formatting and workflow lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy
-      - run: cargo fmt --check
-      - run: cargo check --workspace --locked
-      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
-      - run: cargo test --workspace --locked
-      - run: cargo build --workspace --locked
-      - run: python3 tests/tls_e2e.py
-      - run: python3 tests/smoke_runner.py
-      - run: python3 tests/bounded_load.py
-      - run: python3 tests/tls_concurrency.py
+          components: rustfmt
+      - name: Check Rust formatting
+        run: cargo fmt --all --check
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: actionlint
+      - name: Validate GitHub workflows
+        run: actionlint
 
-  audit:
-    runs-on: ubuntu-latest
+  test:
+    name: Rust checks and integration tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
-      - uses: rustsec/audit-check@v2
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+      - name: Install native build dependencies
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends build-essential cmake pkg-config libssl-dev
+      - name: Check standalone relay
+        run: cargo check -p grotto-relay --locked
+      - name: Check workspace
+        run: cargo check --workspace --all-targets --locked
+      - name: Run Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Run Rust tests
+        run: cargo test --workspace --locked
+      - name: Build client and relay
+        run: cargo build --workspace --locked
+      - name: TLS end-to-end tests
+        run: python3 tests/tls_e2e.py
+      - name: Interactive smoke runner tests
+        run: python3 tests/smoke_runner.py
+      - name: Bounded load tests
+        run: python3 tests/bounded_load.py
+      - name: TLS concurrency tests
+        run: python3 tests/tls_concurrency.py
+
+  audit:
+    name: Dependency security audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+      - name: Audit locked dependencies
+        run: cargo audit --file Cargo.lock
